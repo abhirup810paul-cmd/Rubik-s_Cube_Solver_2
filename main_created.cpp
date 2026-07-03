@@ -2,7 +2,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
-#include <fstream> // Make sure this is at the very top of your file!
+#include <fstream> 
 
 using namespace std;
 
@@ -26,8 +26,6 @@ public:
     virtual RubiksCube& l() = 0;  // Left clockwise
     virtual RubiksCube& l_prime() = 0; // Left prime
     virtual RubiksCube& l2() = 0; // Left 180
-
-    // (In a full implementation, you would add f(), r(), b(), d() here as well)
 
     // Front clockwise, prime, 180
     virtual RubiksCube& f() = 0;
@@ -125,29 +123,148 @@ public:
     }
 
     // Dummy implementations for L moves to satisfy the compiler
-    RubiksCube& l() override { /* Add swapping logic for Left face */ return *this; }
-    RubiksCube& l_prime() override { /* ... */ return *this; }
-    RubiksCube& l2() override { /* ... */ return *this; }
+     
+    RubiksCube& l() override {
+        rotateFaceClockwise((int)FACE::LEFT);
+
+        char temp[3];
+        for (int i = 0; i < 3; i++) temp[i] = cube[(int)FACE::UP][i][0]; // Left col of UP
+
+        for (int i = 0; i < 3; i++) cube[(int)FACE::UP][i][0] = cube[(int)FACE::BACK][2 - i][2]; // Right col of BACK (inverted)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::BACK][i][2] = cube[(int)FACE::DOWN][2 - i][0]; // Left col of DOWN (inverted)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::DOWN][i][0] = cube[(int)FACE::FRONT][i][0]; // Left col of FRONT
+        for (int i = 0; i < 3; i++) cube[(int)FACE::FRONT][i][0] = temp[i];
+
+        return *this;
+    }
+         
+
+    RubiksCube& l_prime() override { 
+        this->l();
+        this->l();
+        this->l(); // Doing 3 clockwise turns is equal to 1 counter-clockwise
+        return *this; 
+    }
+
+    RubiksCube& l2() override { 
+        this->l();
+        this->l();
+        return *this; 
+    }
 
     // Dummy implementations for F moves to satisfy the compiler
-    RubiksCube& f() override { /* Swapping logic for Front */ return *this; }
-    RubiksCube& f_prime() override { return *this; }
-    RubiksCube& f2() override { return *this; }
+    RubiksCube& f() override {
+        // 1. Rotate Front face itself 90 deg clockwise
+        rotateFaceClockwise((int)FACE::FRONT);
+
+        // 2. Shift adjacent tracks
+        char temp[3];
+        for (int i = 0; i < 3; i++) temp[i] = cube[(int)FACE::UP][2][i]; // Bottom row of UP
+
+        for (int i = 0; i < 3; i++) cube[(int)FACE::UP][2][i] = cube[(int)FACE::LEFT][2 - i][2]; // Right col of LEFT (bottom-to-top)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::LEFT][i][2] = cube[(int)FACE::DOWN][0][i]; // Top row of DOWN
+        for (int i = 0; i < 3; i++) cube[(int)FACE::DOWN][0][i] = cube[(int)FACE::RIGHT][2 - i][0]; // Left col of RIGHT (bottom-to-top)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::RIGHT][i][0] = temp[i];
+
+        return *this;
+    }
+
+    RubiksCube& f_prime() override { 
+        this->f();
+        this->f();
+        this->f();
+        return *this; 
+    }
+
+    RubiksCube& f2() override { 
+        this->f();
+        this->f();
+        return *this; 
+    }
 
     // Dummy implementations for R moves to satisfy the compiler
-    RubiksCube& r() override { /* Swapping logic for Right */ return *this; }
-    RubiksCube& r_prime() override { return *this; }
-    RubiksCube& r2() override { return *this; }
+    RubiksCube& r() override {
+        rotateFaceClockwise((int)FACE::RIGHT);
+
+        char temp[3];
+        for (int i = 0; i < 3; i++) temp[i] = cube[(int)FACE::UP][i][2]; // Right col of UP
+
+        for (int i = 0; i < 3; i++) cube[(int)FACE::UP][i][2] = cube[(int)FACE::FRONT][i][2]; // Right col of FRONT
+        for (int i = 0; i < 3; i++) cube[(int)FACE::FRONT][i][2] = cube[(int)FACE::DOWN][i][2]; // Right col of DOWN
+        for (int i = 0; i < 3; i++) cube[(int)FACE::DOWN][i][2] = cube[(int)FACE::BACK][2 - i][0]; // Left col of BACK (inverted)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::BACK][i][0] = temp[2 - i];
+
+        return *this;
+    }
+    
+    RubiksCube& r_prime() override { 
+        this->r();
+        this->r();
+        this->r();
+        return *this; 
+    }
+    
+    RubiksCube& r2() override { 
+        this->r();
+        this->r();
+        return *this; 
+    }
 
     // Dummy implementations for B moves to satisfy the compiler
-    RubiksCube& b() override { /* Swapping logic for Back */ return *this; }
-    RubiksCube& b_prime() override { return *this; }
-    RubiksCube& b2() override { return *this; }
+    RubiksCube& b() override {
+        rotateFaceClockwise((int)FACE::BACK);
+
+        char temp[3];
+        for (int i = 0; i < 3; i++) temp[i] = cube[(int)FACE::UP][0][i]; // Top row of UP
+
+        for (int i = 0; i < 3; i++) cube[(int)FACE::UP][0][i] = cube[(int)FACE::RIGHT][i][2]; // Right col of RIGHT
+        for (int i = 0; i < 3; i++) cube[(int)FACE::RIGHT][i][2] = cube[(int)FACE::DOWN][2][2 - i]; // Bottom row of DOWN (inverted)
+        for (int i = 0; i < 3; i++) cube[(int)FACE::DOWN][2][i] = cube[(int)FACE::LEFT][i][0]; // Left col of LEFT
+        for (int i = 0; i < 3; i++) cube[(int)FACE::LEFT][i][0] = temp[2 - i];
+
+        return *this;
+    }
+
+    RubiksCube& b_prime() override { 
+        this->b();
+        this->b();
+        this->b();
+        return *this; 
+    }
+
+    RubiksCube& b2() override { 
+        this->b();
+        this->b();
+        return *this; 
+    }
 
     // Dummy implementations for D moves to satisfy the compiler
-    RubiksCube& d() override { /* Swapping logic for Down */ return *this; }
-    RubiksCube& d_prime() override { return *this; }
-    RubiksCube& d2() override { return *this; }
+    RubiksCube& d() override {
+        rotateFaceClockwise((int)FACE::DOWN);
+
+        char temp[3];
+        for (int i = 0; i < 3; i++) temp[i] = cube[(int)FACE::FRONT][2][i]; // Bottom row of FRONT
+
+        for (int i = 0; i < 3; i++) cube[(int)FACE::FRONT][2][i] = cube[(int)FACE::LEFT][2][i];
+        for (int i = 0; i < 3; i++) cube[(int)FACE::LEFT][2][i] = cube[(int)FACE::BACK][2][i];
+        for (int i = 0; i < 3; i++) cube[(int)FACE::BACK][2][i] = cube[(int)FACE::RIGHT][2][i];
+        for (int i = 0; i < 3; i++) cube[(int)FACE::RIGHT][2][i] = temp[i];
+
+        return *this;
+    }
+    
+    RubiksCube& d_prime() override { 
+        this->d();
+        this->d();
+        this->d();
+        return *this; 
+    }
+
+    RubiksCube& d2() override { 
+        this->d();
+        this->d();
+        return *this; 
+    }
 
 
     // Check if the cube is solved
