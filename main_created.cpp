@@ -47,6 +47,13 @@ public:
     virtual RubiksCube& d_prime() = 0;
     virtual RubiksCube& d2() = 0;
 
+    // The new bridge function for the database
+    virtual uint8_t publicGetCorner(int index) const = 0;
+
+    virtual void applyMove(int move) = 0;
+    virtual int getInverseMove(int move) const = 0;
+    virtual string getMoveName(int move) const = 0;
+
     virtual bool isSolved() const = 0;
     virtual void print() const = 0;
 };
@@ -73,6 +80,39 @@ private:
                 cube[face][i][j] = temp[i][j];
             }
         }
+    }
+
+    // Helper function to check if 3 chars match 3 specific colors (in any order)
+    bool hasColors(char c1, char c2, char c3, char t1, char t2, char t3) const {
+        int matchCount = 0;
+        if (c1 == t1 || c1 == t2 || c1 == t3) matchCount++;
+        if (c2 == t1 || c2 == t2 || c2 == t3) matchCount++;
+        if (c3 == t1 || c3 == t2 || c3 == t3) matchCount++;
+        return matchCount == 3;
+    }
+
+    int getCornerPositionID(char c1, char c2, char c3) const {
+        // Assuming Standard Western Colors: 
+        // W=Up, Y=Down, G=Front, B=Back, R=Right, O=Left
+        
+        // 0: URF (Up-Right-Front)
+        if (hasColors(c1, c2, c3, 'W', 'R', 'G')) return 0;
+        // 1: UFL (Up-Front-Left)
+        if (hasColors(c1, c2, c3, 'W', 'G', 'O')) return 1;
+        // 2: ULB (Up-Left-Back)
+        if (hasColors(c1, c2, c3, 'W', 'O', 'B')) return 2;
+        // 3: UBR (Up-Back-Right)
+        if (hasColors(c1, c2, c3, 'W', 'B', 'R')) return 3;
+        // 4: DFR (Down-Front-Right)
+        if (hasColors(c1, c2, c3, 'Y', 'G', 'R')) return 4;
+        // 5: DLF (Down-Left-Front)
+        if (hasColors(c1, c2, c3, 'Y', 'O', 'G')) return 5;
+        // 6: DBL (Down-Back-Left)
+        if (hasColors(c1, c2, c3, 'Y', 'B', 'O')) return 6;
+        // 7: DRB (Down-Right-Back)
+        if (hasColors(c1, c2, c3, 'Y', 'R', 'B')) return 7;
+
+        return -1; // Error fallback
     }
 
 public:
@@ -267,6 +307,136 @@ public:
     }
 
 
+    uint8_t publicGetCorner(int index) const override {
+        char top_bottom_sticker;
+        char right_left_sticker;
+        char front_back_sticker;
+
+        switch (index) {
+            case 0: // URF
+                top_bottom_sticker = cube[(int)FACE::UP][2][2];
+                right_left_sticker = cube[(int)FACE::RIGHT][0][0];
+                front_back_sticker = cube[(int)FACE::FRONT][0][2];
+                break;
+            case 1: // UFL
+                top_bottom_sticker = cube[(int)FACE::UP][2][0];
+                front_back_sticker = cube[(int)FACE::FRONT][0][0];
+                right_left_sticker = cube[(int)FACE::LEFT][0][2];
+                break;
+            case 2: // ULB
+                top_bottom_sticker = cube[(int)FACE::UP][0][0];
+                right_left_sticker = cube[(int)FACE::LEFT][0][0];
+                front_back_sticker = cube[(int)FACE::BACK][0][2];
+                break;
+            case 3: // UBR
+                top_bottom_sticker = cube[(int)FACE::UP][0][2];
+                front_back_sticker = cube[(int)FACE::BACK][0][0];
+                right_left_sticker = cube[(int)FACE::RIGHT][0][2];
+                break;
+            case 4: // DFR
+                top_bottom_sticker = cube[(int)FACE::DOWN][0][2];
+                front_back_sticker = cube[(int)FACE::FRONT][2][2];
+                right_left_sticker = cube[(int)FACE::RIGHT][2][0];
+                break;
+            case 5: // DLF
+                top_bottom_sticker = cube[(int)FACE::DOWN][0][0];
+                right_left_sticker = cube[(int)FACE::LEFT][2][2];
+                front_back_sticker = cube[(int)FACE::FRONT][2][0];
+                break;
+            case 6: // DBL
+                top_bottom_sticker = cube[(int)FACE::DOWN][2][0];
+                front_back_sticker = cube[(int)FACE::BACK][2][2];
+                right_left_sticker = cube[(int)FACE::LEFT][2][0];
+                break;
+            case 7: // DRB
+                top_bottom_sticker = cube[(int)FACE::DOWN][2][2];
+                right_left_sticker = cube[(int)FACE::RIGHT][2][2];
+                front_back_sticker = cube[(int)FACE::BACK][2][0];
+                break;
+            default:
+                return 0;
+        }
+
+        // 1. Identify which physical piece is sitting here
+        int position = getCornerPositionID(top_bottom_sticker, right_left_sticker, front_back_sticker);
+
+        // 2. Calculate Orientation (Standard Kociemba rules)
+        // 0 = White/Yellow is on the Top/Bottom face
+        // 1 = White/Yellow is twisted clockwise (onto the R/L face)
+        // 2 = White/Yellow is twisted counter-clockwise (onto the F/B face)
+        int orientation = 0;
+        if (top_bottom_sticker == 'W' || top_bottom_sticker == 'Y') {
+            orientation = 0;
+        } else if (right_left_sticker == 'W' || right_left_sticker == 'Y') {
+            orientation = 1; 
+        } else if (front_back_sticker == 'W' || front_back_sticker == 'Y') {
+            orientation = 2; 
+        }
+
+        // 3. Pack into the 8-bit format expected by the heuristic database
+        return (uint8_t)((orientation << 3) | position);
+    }
+
+
+    void applyMove(int move) override {
+        switch (move) {
+            case 0: u(); break;
+            case 1: u_prime(); break;
+            case 2: u2(); break;
+            case 3: l(); break;
+            case 4: l_prime(); break;
+            case 5: l2(); break;
+            case 6: f(); break;
+            case 7: f_prime(); break;
+            case 8: f2(); break;
+            case 9: r(); break;
+            case 10: r_prime(); break;
+            case 11: r2(); break;
+            case 12: b(); break;
+            case 13: b_prime(); break;
+            case 14: b2(); break;
+            case 15: d(); break;
+            case 16: d_prime(); break;
+            case 17: d2(); break;
+        }
+    }
+
+
+    int getInverseMove(int move) const override {
+        int face = move / 3;  // Determines which face (0 to 5)
+        int turn = move % 3;  // Determines which turn type (0, 1, or 2)
+
+        if (turn == 0) return face * 3 + 1; // Clockwise -> Prime
+        if (turn == 1) return face * 3;     // Prime -> Clockwise
+        return move;                        // 180 -> 180
+    }
+
+
+    string getMoveName(int move) const override {
+        switch (move) {
+            case 0: return "U";
+            case 1: return "U'";
+            case 2: return "U2";
+            case 3: return "L";
+            case 4: return "L'";
+            case 5: return "L2";
+            case 6: return "F";
+            case 7: return "F'";
+            case 8: return "F2";
+            case 9: return "R";
+            case 10: return "R'";
+            case 11: return "R2";
+            case 12: return "B";
+            case 13: return "B'";
+            case 14: return "B2";
+            case 15: return "D";
+            case 16: return "D'";
+            case 17: return "D2";
+            default: return "";
+        }
+    }
+
+
     // Check if the cube is solved
     bool isSolved() const override {
         for (int f = 0; f < 6; f++) {
@@ -340,7 +510,7 @@ public:
     }
 
     // Public function to get corner data for heuristic calculation (since getCorner is private)
-    uint8_t publicGetCorner(int index) const {
+    uint8_t publicGetCorner(int index) const override {
         return getCorner(index);
     }
 
@@ -533,7 +703,7 @@ public:
 
 
     // Applies a move based on its index (0 to 17)
-    void applyMove(int moveIndex) {
+    void applyMove(int moveIndex) override {
         switch(moveIndex) {
             case 0: u(); break;        case 1: u_prime(); break;        case 2: u2(); break;
             case 3: l(); break;        case 4: l_prime(); break;        case 5: l2(); break;
@@ -545,7 +715,7 @@ public:
     }
 
     // Returns the inverse move index to cleanly backtrack
-    int getInverseMove(int moveIndex) {
+    int getInverseMove(int moveIndex) const override {
         // If it's a half-turn (like U2, L2), it is its own inverse
         if (moveIndex % 3 == 2) return moveIndex;
         // If it's a clockwise turn (like U), the inverse is prime (U')
@@ -555,7 +725,7 @@ public:
     }
 
     // Helper to print human-readable move notation
-    string getMoveName(int moveIndex) {
+    string getMoveName(int moveIndex) const override {
         string names[] = {
             "U", "U'", "U2", "L", "L'", "L2", 
             "F", "F'", "F2", "R", "R'", "R2", 
@@ -592,7 +762,7 @@ public:
 vector<uint8_t> corner_pdb;
 
 // The indexing function
-int getCornerIndex(const RubiksCubeBitboard& cube) {
+int getCornerIndex(const RubiksCube& cube) {
     int pos[8];
     int ori[8];
     for(int i = 0; i < 8; ++i) {
@@ -619,7 +789,7 @@ int getCornerIndex(const RubiksCubeBitboard& cube) {
 }
 
 
-int getCornerHeuristic(const RubiksCubeBitboard& cube) {
+int getCornerHeuristic(const RubiksCube& cube) {
     return corner_pdb[getCornerIndex(cube)];
 }
 
@@ -627,7 +797,7 @@ int getCornerHeuristic(const RubiksCubeBitboard& cube) {
 // 3. SOLVING ALGORITHM: NORMAL DFS 
 vector<int> current_path;
 
-bool dfs(RubiksCubeBitboard& cube, int current_depth, int depth_limit) {
+bool dfs(RubiksCube& cube, int current_depth, int depth_limit) {
     if (cube.isSolved()) return true;
     if (current_depth >= depth_limit) return false;
 
@@ -652,7 +822,7 @@ bool dfs(RubiksCubeBitboard& cube, int current_depth, int depth_limit) {
 
 
 // UPDATED DFS WITH CORNER HEURISTIC PRUNING
-bool updated_dfs(RubiksCubeBitboard& cube, int current_depth, int depth_limit) {
+bool updated_dfs(RubiksCube& cube, int current_depth, int depth_limit) {
     if (cube.isSolved()) return true;
 
     // --- THE IDA* SNIPER LINE ---
@@ -676,7 +846,7 @@ bool updated_dfs(RubiksCubeBitboard& cube, int current_depth, int depth_limit) {
 
 
 // 4. SOLVING ALGORITHM: ITERATIVE DEEPENING DFS (IDDFS)
-void iddfsSolve(RubiksCubeBitboard& cube) {
+void iddfsSolve(RubiksCube& cube) {
     // We will cap this standard IDDFS at a safe depth of 5 moves for testing 
     // because without a heuristic, searching depth 6+ takes too long!
     int max_depth = 5; // You can increase this for deeper searches, but be warned of exponential time!
@@ -701,7 +871,7 @@ void iddfsSolve(RubiksCubeBitboard& cube) {
 
 
 // 5. SOLVING ALGORITHM: IDA* (Iterative Deepening A* with Corner Heuristic)
-void idaStarSolve(RubiksCubeBitboard& cube) {
+void idaStarSolve(RubiksCube& cube) {
     int max_depth = 22; // Change this to 22 for more challenging scrambles (but be patient!)
 
     for (int limit = 0; limit <= max_depth; limit++) {
@@ -739,7 +909,9 @@ int main() {
     while (getline(cin, inputLine)) {
         if (inputLine.empty() || inputLine == "exit") break;
 
+        // RubiksCube3dArray cube;
         RubiksCubeBitboard cube;
+        // RubiksCube cube; 
         
         // Parse the input string separated by spaces
         string currentMove = "";
